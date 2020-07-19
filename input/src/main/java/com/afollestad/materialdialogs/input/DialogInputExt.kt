@@ -18,9 +18,14 @@
 package com.afollestad.materialdialogs.input
 
 import android.annotation.SuppressLint
+import android.graphics.Color
 import android.text.InputType
+import android.view.Gravity
+import android.view.View
 import android.widget.EditText
+import android.widget.TextView
 import androidx.annotation.CheckResult
+import androidx.annotation.ColorRes
 import androidx.annotation.StringRes
 import com.afollestad.materialdialogs.MaterialDialog
 import com.afollestad.materialdialogs.WhichButton.POSITIVE
@@ -30,7 +35,11 @@ import com.afollestad.materialdialogs.callbacks.onPreShow
 import com.afollestad.materialdialogs.callbacks.onShow
 import com.afollestad.materialdialogs.customview.customView
 import com.afollestad.materialdialogs.customview.getCustomView
+import com.afollestad.materialdialogs.customview.isRtl
 import com.afollestad.materialdialogs.utils.MDUtil.maybeSetTextColor
+import com.afollestad.materialdialogs.utils.MDUtil.maybeSetTextSize
+import com.afollestad.materialdialogs.utils.MDUtil.resolveColor
+import com.afollestad.materialdialogs.utils.MDUtil.resolveString
 import com.afollestad.materialdialogs.utils.MDUtil.textChanged
 import com.google.android.material.textfield.TextInputLayout
 
@@ -59,9 +68,16 @@ private fun MaterialDialog.lookupInputLayout(): TextInputLayout {
  * @throws IllegalStateException if the dialog is not an input dialog.
  */
 @CheckResult fun MaterialDialog.getInputField(): EditText {
-  return getInputLayout().editText ?: throw IllegalStateException(
+  val editText = getInputLayout().editText
+  editText?.gravity = if(isRtl()) Gravity.RIGHT else Gravity.LEFT
+  return  editText ?: throw IllegalStateException(
       "You have not setup this dialog as an input dialog."
   )
+}
+
+private fun MaterialDialog.getErrorField(): TextView {
+  return getCustomView().findViewById(R.id.md_input_error) as? TextView
+      ?: throw IllegalStateException("You have not setup this dialog as an input dialog.")
 }
 
 /**
@@ -132,6 +148,24 @@ fun MaterialDialog.input(
   return this
 }
 
+fun MaterialDialog.setErrorMessage(error: String, res: Int? = null, @ColorRes colorRes : Int? = null) {
+  val value = if (error.isNotEmpty()) error else resolveString(context = context, res = res)
+  val errorField = getErrorField()
+  errorField.text = value
+  errorField.visibility =  if(value.isNullOrEmpty()) View.GONE else View.VISIBLE
+  errorField.setTextColor(
+      when (colorRes) {
+        null -> Color.RED
+        else -> resolveColor(context = windowContext, res = colorRes)
+      })
+
+  getInputLayout().boxStrokeColor =
+      when {
+        error.isNotEmpty() -> Color.RED
+        else -> resolveColor(context = windowContext, attr = R.attr.colorPrimary)
+      }
+}
+
 private fun MaterialDialog.prefillInput(
   prefill: CharSequence?,
   prefillRes: Int?,
@@ -158,6 +192,7 @@ private fun MaterialDialog.styleInput(
 ) {
   val resources = windowContext.resources
   val editText = getInputField()
+  val errorField = getErrorField()
 
   editText.hint = hint ?: if (hintRes != null) resources.getString(hintRes) else null
   editText.inputType = inputType
@@ -166,5 +201,12 @@ private fun MaterialDialog.styleInput(
       attrRes = R.attr.md_color_content,
       hintAttrRes = R.attr.md_color_hint
   )
-  bodyFont?.let(editText::setTypeface)
+  errorField.maybeSetTextColor(windowContext,
+      attrRes = R.attr.md_color_error
+  )
+  errorField.maybeSetTextSize(windowContext, attrRes = R.attr.md_size_error, dimenRes = null)
+  bodyFont?.let {
+    editText.typeface = it
+    errorField.typeface = it
+  }
 }
